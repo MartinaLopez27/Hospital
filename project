@@ -1,9 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-
-import streamlit as st
-import pandas as pd
 
 # Cargar los archivos CSV en DataFrames
 df1 = pd.read_csv('Diuresis.csv', encoding='ISO-8859-1', sep=';', decimal=',')
@@ -14,20 +10,46 @@ df5 = pd.read_csv('peso_data_patients.csv', encoding='ISO-8859-1', sep=';', deci
 
 # Obtener todos los IDs de los cuatro DataFrames y agregarlos a una lista
 ids = sorted(list(set(df1['idPaciente']).union(set(df2['idPaciente'])).union(set(df3['IdPaciente'])).union(set(df4['IdPaciente']))))
+
 # Unir los cuatro DataFrames en uno solo
 df = pd.concat([df1, df2, df3, df4], ignore_index=True)
-# Eliminar filas duplicadas basadas en la columna "ID"
-#df = df.drop_duplicates(subset=['IdPaciente'])
 
-# Crear desplegable con los IDs de los pacientes
+# Definir límite por defecto
+DEFAULT_LIMIT = 10
+
+# Desplegable de IDs de pacientes
 patient_id = st.selectbox('Selecciona un paciente:', ids)
 
-# Filtrar los datos del paciente seleccionado
-patient_data = df[df['idPaciente'] == patient_id]
-patient_data = patient_data.drop_duplicates(subset=['idPaciente', 'FechaIngresoUnidad'])
+# Filtrar datos del paciente seleccionado
+filtered_data = df[df['idPaciente'] == patient_id]
 
-# Mostrar la información del paciente
-st.write(f'ID del paciente: {patient_id}')
-st.write(f'Fecha de ingreso: {patient_data["FechaIngresoUnidad"].iloc[0]}')
-st.write(f'Edad: {df5[df5["idPaciente"]==patient_id]["edad"].iloc[0]} años')
-st.write(f'Género: {df5[df5["idPaciente"]==patient_id]["genero"].iloc[0]}')
+# Mostrar información básica del paciente
+patient_info = filtered_data[['idPaciente', 'Fecha_ingreso', 'Edad', 'Genero']].iloc[0]
+st.write('Información del paciente:')
+st.write(patient_info)
+
+# Filtros para valores específicos
+min_diuresis = st.sidebar.number_input('Diuresis mínima', value=0.5)
+max_lactico = st.sidebar.number_input('Ácido láctico máximo', value=1.8)
+min_medio = st.sidebar.number_input('Medio mínimo', value=65)
+max_norad = st.sidebar.number_input('Noradrenalina máxima', value=0.1)
+max_dobu = st.sidebar.number_input('Dobutamina máxima', value=5)
+
+# Aplicar filtros
+filtered_data = filtered_data[(filtered_data['Total'] > min_diuresis) &
+                              (filtered_data['Valor'] < max_lactico) &
+                              (filtered_data['Valor'] > min_medio) &
+                              (filtered_data['PrincipioActivo'] == 'Noradrenalina') &
+                              (filtered_data['Valor'] <= max_norad) &
+                              (filtered_data['PrincipioActivo'] == 'Dobutamina') &
+                              (filtered_data['Valor'] <= max_dobu)]
+
+# Mostrar tabla de datos del paciente seleccionado
+st.write('Tabla de datos del paciente:')
+st.write(filtered_data[['Evento', 'Propiedad', 'Valor', 'Fecha', 'Warning', 'Alerta']])
+
+# Verificar si se cumplen todos los parámetros
+if len(filtered_data) > 0:
+    st.success('El paciente cumple todos los parámetros')
+else:
+    st.warning('El paciente no cumple todos los parámetros')
