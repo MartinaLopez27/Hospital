@@ -1,0 +1,90 @@
+import pandas as pd
+import numpy as np
+
+#Obtener la lista de los IDs de los pacientes:
+
+# Cargar los archivos CSV en DataFrames
+df1 = pd.read_csv('Diuresis.csv', encoding='ISO-8859-1', sep=';', decimal=',')
+df2 = pd.read_csv('Perf.csv', encoding='ISO-8859-1', sep=';', decimal=',')
+df3 = pd.read_csv('Datos grafica.csv', encoding='ISO-8859-1', sep=';', decimal=',')
+df4 = pd.read_csv('Datos laboratorio.csv', encoding='ISO-8859-1', sep=';', decimal=',')
+df5 = pd.read_csv('peso_data_patients.csv', encoding='ISO-8859-1', sep=';', decimal=',')
+
+# Obtener todos los IDs de los cuatro DataFrames y agregarlos a una lista
+ids = sorted(list(set(df1['idPaciente']).union(set(df2['idPaciente'])).union(set(df3['IdPaciente'])).union(set(df4['IdPaciente']))))
+# Unir los cuatro DataFrames en uno solo
+df = pd.concat([df1, df2, df3, df4], ignore_index=True)
+# Eliminar filas duplicadas basadas en la columna "ID"
+#df = df.drop_duplicates(subset=['IdPaciente'])
+print('La lista de los IDs de los pacientes es:', ids)
+
+
+# Diuresis.csv
+# Obtener los IDs de los pacientes que han recibido los fármacos que buscamos
+medications = ['Noradrenalina', 'Dobutamina']
+perf_patients = df2[df2['PrincipioActivo'].isin(medications)]['idPaciente']
+# Obtener los IDs de los pacientes que aparecen en ambos DataFrames
+ids = sorted(list(set(df1.merge(df5, on='FechaIngresoUnidad', how='inner')['idPaciente']).intersection(set(perf_patients))))
+# Calcular la diuresis en cc/kg/h para cada paciente y filtrar los que tienen una diuresis mayor a 0.5 cc/kg/h
+for patient_id in ids:
+    # Obtener la fecha de ingreso del paciente en Diuresis.csv
+    diuresis_date = df1[df1['idPaciente'] == patient_id]['FechaIngresoUnidad'].values[0]
+    # Obtener el peso del paciente en peso_data_patients.csv
+    patient_weight = df5[df5['FechaIngresoUnidad'] == diuresis_date]['Peso'].values[0]
+    # Filtrar las filas correspondientes al paciente actual
+    patient_rows = df1[df1['idPaciente'] == patient_id]
+    # Calcular la diuresis en cc/kg/h
+    total_diuresis = patient_rows['Volumen'].sum()
+    diuresis_rate = total_diuresis / patient_weight / len(patient_rows)
+    if diuresis_rate > 0.5:
+        print(f'El paciente {patient_id} tiene una diuresis de {diuresis_rate} cc/kg/h, que es mayor a 0.5 cc/kg/h')
+
+
+        
+# Perf.csv
+# Convertir la columna "Valor" a valores numéricos
+df2['Valor'] = pd.to_numeric(df2['Valor'], errors='coerce')
+# Filtrar los pacientes que cumplen los criterios y obtener información de fecha y hora
+filtered_data_norad = df2[(df2['PrincipioActivo'] == 'Noradrenalina') & (df2['Valor'] <= 0.1)]
+filtered_data_dobu = df2[(df2['PrincipioActivo'] == 'Dobutamina') & (df2['Valor'] <= 5)]
+filtered_data = pd.concat([filtered_data_norad, filtered_data_dobu], ignore_index=True)
+filtered_data = filtered_data[['idPaciente', 'FechaRegistro', 'PrincipioActivo', 'Valor']]
+# Ordenar por fecha y hora de registro
+filtered_data = filtered_data.sort_values(['idPaciente', 'FechaRegistro'])
+# Agrupar por paciente e imprimir información
+for patient_id, patient_data in filtered_data.groupby('idPaciente'):
+    print(f"Paciente {patient_id}:")
+    for index, row in patient_data.iterrows():
+        print(f"  - En {row['FechaRegistro']} el valor de {row['PrincipioActivo'].lower()} es {row['Valor']}")
+
+        
+        
+# Datosgrafica.csv
+# Convertir la columna "Valor" a valores numéricos
+df3['Valor'] = pd.to_numeric(df3['Valor'], errors='coerce')
+# Filtrar los pacientes que cumplen los criterios y obtener información de fecha y hora
+filtered_data = df3[(df3['Propiedad'] == 'Medio') & (df3['Valor'] > 65)]
+filtered_data = filtered_data[['IdPaciente', 'DíaHoraEntradaDatoEnGráfica', 'Valor']]
+# Ordenar por fecha y hora de registro
+filtered_data = filtered_data.sort_values(['IdPaciente', 'DíaHoraEntradaDatoEnGráfica'])
+# Agrupar por paciente e imprimir información
+for patient_id, patient_data in filtered_data.groupby('IdPaciente'):
+    print(f"Paciente {patient_id}:")
+    for index, row in patient_data.iterrows():
+        print(f"  - En {row['DíaHoraEntradaDatoEnGráfica']} el valor de TA media es: {row['Valor']} mm Hg > 65 mm Hg")        
+        
+
+             
+# Datoslaboratorio.csv
+# Convertir la columna "Valor" a valores numéricos
+df4['Valor'] = pd.to_numeric(df4['Valor'], errors='coerce')
+# Filtrar los pacientes que cumplen los criterios y obtener información de fecha y hora
+filtered_data = df4[(df4['Propiedad'] == 'Ácido láctico') & (df4['Valor'] < 1.8)]
+filtered_data = filtered_data[['IdPaciente', 'DíaHoraEntradaDatoEnGráfica', 'Valor']]
+# Ordenar por fecha y hora de registro
+filtered_data = filtered_data.sort_values(['IdPaciente', 'DíaHoraEntradaDatoEnGráfica'])
+# Agrupar por paciente e imprimir información
+for patient_id, patient_data in filtered_data.groupby('IdPaciente'):
+    print(f"Paciente {patient_id}:")
+    for index, row in patient_data.iterrows():
+        print(f"  - En {row['DíaHoraEntradaDatoEnGráfica']} el valor de ácido láctico: {row['Valor']} < 1'8")
