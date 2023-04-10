@@ -1,55 +1,48 @@
 import streamlit as st
-import pandas as pd
+from utils import *
 
-# Cargar los archivos CSV en DataFrames
-df1 = pd.read_csv('Diuresis.csv', encoding='ISO-8859-1', sep=';', decimal=',')
-df2 = pd.read_csv('Perf.csv', encoding='ISO-8859-1', sep=';', decimal=',')
-df3 = pd.read_csv('Datos grafica.csv', encoding='ISO-8859-1', sep=';', decimal=',')
-df4 = pd.read_csv('Datos laboratorio.csv', encoding='ISO-8859-1', sep=';', decimal=',')
-df5 = pd.read_csv('peso_data_patients.csv', encoding='ISO-8859-1', sep=';', decimal=',')
+# Características básicas de la página
+st.set_page_config(page_icon="📊", page_title="Detección de anomalías cardiacas", layout="wide")
+st.image("https://www.codificandobits.com/img/cb-logo.png", width=200)
+st.title("Detección de anomalías cardiacas con autoencoders")
 
-# Obtener todos los IDs de los cuatro DataFrames y agregarlos a una lista
-ids = sorted(list(set(df1['idPaciente']).union(set(df2['idPaciente'])).union(set(df3['IdPaciente'])).union(set(df4['IdPaciente']))))
+c29, c30, c31 = st.columns([1, 6, 1]) # 3 columnas: 10%, 60%, 10%
 
-# Unir los cuatro DataFrames en uno solo
-df = pd.concat([df1, df2, df3, df4], ignore_index=True)
+UMBRAL = 0.089
 
-# Definir límite por defecto
-DEFAULT_LIMIT = 10
+with c30:
+    uploaded_file = st.file_uploader(
+        "", type = 'pkl',
+        key="1",
+    )
 
-# Desplegable de IDs de pacientes
-patient_id = st.selectbox('Selecciona un paciente:', ids)
 
-# Filtrar datos del paciente seleccionado
-filtered_data = df[df['idPaciente'] == patient_id]
+    if uploaded_file is not None:
+        file_container = st.expander("Verifique el archivo .pkl que acaba de subir")
 
-# Mostrar información básica del paciente
-patient_info = filtered_data[['idPaciente', 'Fecha_ingreso', 'Edad', 'Genero']].iloc[0]
-st.write('Información del paciente:')
-st.write(patient_info)
+        info_box_wait = st.info(
+            f"""
+                Realizando la clasificación...
+                """)
 
-# Filtros para valores específicos
-min_diuresis = st.sidebar.number_input('Diuresis mínima', value=0.5)
-max_lactico = st.sidebar.number_input('Ácido láctico máximo', value=1.8)
-min_medio = st.sidebar.number_input('Medio mínimo', value=65)
-max_norad = st.sidebar.number_input('Noradrenalina máxima', value=0.1)
-max_dobu = st.sidebar.number_input('Dobutamina máxima', value=5)
+        # Acá viene la predicción con el modelo
+        dato = leer_dato(uploaded_file)
+        autoencoder = Autoencoder()
+        autoencoder = cargar_modelo_preentrenado('autoencoder.pth')
+        prediccion = predecir(autoencoder, dato, UMBRAL)
+        categoria = obtener_categoria(prediccion)
 
-# Aplicar filtros
-filtered_data = filtered_data[(filtered_data['Total'] > min_diuresis) &
-                              (filtered_data['Valor'] < max_lactico) &
-                              (filtered_data['Valor'] > min_medio) &
-                              (filtered_data['PrincipioActivo'] == 'Noradrenalina') &
-                              (filtered_data['Valor'] <= max_norad) &
-                              (filtered_data['PrincipioActivo'] == 'Dobutamina') &
-                              (filtered_data['Valor'] <= max_dobu)]
 
-# Mostrar tabla de datos del paciente seleccionado
-st.write('Tabla de datos del paciente:')
-st.write(filtered_data[['Evento', 'Propiedad', 'Valor', 'Fecha', 'Warning', 'Alerta']])
+        # Y mostrar el resultado
+        info_box_result = st.info(f"""
+        	El dato analizado corresponde a un sujeto: {categoria}
+        	""")
 
-# Verificar si se cumplen todos los parámetros
-if len(filtered_data) > 0:
-    st.success('El paciente cumple todos los parámetros')
-else:
-    st.warning('El paciente no cumple todos los parámetros')
+    else:
+        st.info(
+            f"""
+                👆 Debe cargar primero un dato con extensión .pkl
+                """
+        )
+
+        st.stop()
